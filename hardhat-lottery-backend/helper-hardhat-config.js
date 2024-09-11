@@ -8,7 +8,7 @@ const networkConfig={
         entrenceFee:ethers.parseEther("0.01"),
         keyHash:"0x787d74caea10b2b357790d5b5247c2f63d1d91572a9846f780606e4d953677ae",
         callbackGasLimit:"500000",
-        subscriptionId:"6926",
+        subscriptionId:"45576004283606061766829089852832794170716251767381127522517052040765924770534",
         interval:"30"
     },
     137:{

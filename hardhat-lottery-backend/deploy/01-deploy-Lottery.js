@@ -16,7 +16,7 @@ async function deployLottery() {
     let callbackGasLimit=networkConfig[chainId]["callbackGasLimit"]
 
     if(devlopmentChain.includes(network.name)){
-        const vrfCordinatorMockResponse=await deployments.get("VRFCoordinatorV2Mock")
+        const vrfCordinatorMockResponse=await deployments.get("VRFCoordinatorV2_5Mock")
         const vrfCordinatorMock=await ethers.getContractAt(vrfCordinatorMockResponse.abi,
             vrfCordinatorMockResponse.address
         )
@@ -36,7 +36,7 @@ async function deployLottery() {
              
         //step2->Funding subscription
         //Note ethers.parseEther("")  not ethers.util.parseEther("")
-     await vrfCordinatorMock.fundSubscription(subscriptionId,ethers.parseEther("30"))
+     await vrfCordinatorMock.fundSubscription(subscriptionId,ethers.parseEther("2"))
           
     }
     else{

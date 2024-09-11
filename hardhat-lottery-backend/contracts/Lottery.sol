@@ -8,14 +8,15 @@
 */ 
  
 pragma solidity ^0.8.7;
-import {VRFCoordinatorV2Interface} from "@chainlink/contracts/src/v0.8/vrf/interfaces/VRFCoordinatorV2Interface.sol";
-import {VRFConsumerBaseV2} from "@chainlink/contracts/src/v0.8/vrf/VRFConsumerBaseV2.sol";
+import "@chainlink/contracts/src/v0.8/vrf/VRFConsumerBaseV2.sol";
+import {VRFConsumerBaseV2Plus} from "@chainlink/contracts/src/v0.8/vrf/dev/VRFConsumerBaseV2Plus.sol";
+import {VRFV2PlusClient} from "@chainlink/contracts/src/v0.8/vrf/dev/libraries/VRFV2PlusClient.sol";
 import {AutomationCompatibleInterface} from "@chainlink/contracts/src/v0.8/automation/AutomationCompatible.sol";
 
 error Lottery_UpdateKeepNotNeeded(uint256 currentBalance,uint256 numPlayers, uint256 lotteryState) ;
 error Raffle__RaffleNotOpen();
-contract Lottery is VRFConsumerBaseV2,AutomationCompatibleInterface{     
-  
+contract Lottery is VRFConsumerBaseV2Plus,AutomationCompatibleInterface{     
+   
     enum LotteryState{ 
         OPEN,  
         CALCULATING
@@ -28,7 +29,7 @@ contract Lottery is VRFConsumerBaseV2,AutomationCompatibleInterface{
     
     
     uint256 private s_requestId;
-    uint64 private immutable i_subscriptionId;//id of the subscription that we request to
+    uint256 private immutable i_subscriptionId;//id of the subscription that we request to
     //will get from vrf chain link subscribtion
     bytes32 private immutable i_keyHash;//its is the gasLimit, if the gas price is very
     //high to get the random number then setting a limit insure you don't send excess money
@@ -36,7 +37,7 @@ contract Lottery is VRFConsumerBaseV2,AutomationCompatibleInterface{
     uint32 private immutable i_callbackGasLimit;//This is used to set limit, to how much 
     //gas we can spent in wrinting a code of fulfillRandomWords() ,if the gas exides the
     //random words will stop responding
-    VRFCoordinatorV2Interface private immutable i_vrfCoordinator;//this is the vrfCoordinator
+    VRFConsumerBaseV2Plus private immutable i_vrfCoordinator;//this is the vrfCoordinator
     //Contract that does the random number
     uint16 private constant REQUEST_CONFIRMATION = 3;//How much block confirmation to wait
     uint32 private constant NUM_WORDS=1;//How many random number we want
@@ -53,13 +54,13 @@ contract Lottery is VRFConsumerBaseV2,AutomationCompatibleInterface{
     event RequestFulfilled(address newWinner);
 
 //address vrfCoordinatorV2: is the address of the contract that does the random number varification
-    constructor(address vrfCoordinatorV2,uint256 enterenceFee,uint64 subscriptionId,bytes32 keyHash,
-    uint32 callbackGasLimit,uint256 updateInterval) VRFConsumerBaseV2(vrfCoordinatorV2) {
+    constructor(address vrfCoordinatorV2,uint256 enterenceFee,uint256 subscriptionId,bytes32 keyHash,
+    uint32 callbackGasLimit,uint256 updateInterval) VRFConsumerBaseV2Plus(vrfCoordinatorV2) {
         i_enternceFee=enterenceFee; 
-        i_vrfCoordinator = VRFCoordinatorV2Interface(vrfCoordinatorV2);
         i_subscriptionId=subscriptionId;
-        i_keyHash=keyHash;
-        i_callbackGasLimit=callbackGasLimit;
+        i_vrfCoordinator=VRFConsumerBaseV2Plus(vrfCoordinatorV2);
+        i_keyHash=keyHash; 
+        i_callbackGasLimit=callbackGasLimit; 
         i_interval=updateInterval;
         s_lastTimeStamp = block.timestamp; 
         s_lotteryState=LotteryState.OPEN; //Opening the contract to accept players
@@ -109,12 +110,17 @@ random winner.
         }
         s_lotteryState=LotteryState.CALCULATING; //Changing the state so that no new player
         //can enter during reuest of random winner
-       uint256 requestId = i_vrfCoordinator.requestRandomWords(
-            i_keyHash,  
-            i_subscriptionId,
-            REQUEST_CONFIRMATION,
-            i_callbackGasLimit,
-            NUM_WORDS
+       uint256 requestId = s_vrfCoordinator.requestRandomWords(
+        VRFV2PlusClient.RandomWordsRequest({
+            keyHash:i_keyHash,  
+            subId:i_subscriptionId,
+            requestConfirmations :REQUEST_CONFIRMATION,
+            callbackGasLimit:i_callbackGasLimit,
+            numWords:NUM_WORDS, 
+            extraArgs:VRFV2PlusClient._argsToBytes(
+                    VRFV2PlusClient.ExtraArgsV1({nativePayment: true})
+            )
+        })
         );  
       
         s_requestId = requestId;
@@ -126,18 +132,18 @@ random winner.
 
 //_randomWords will contain the random number generated as we set NUM_WORDS=1 so it 
 //will be of size 1
-     function fulfillRandomWords (uint256 /*_requestId*/,uint256[] memory _randomWords) internal override {
+     function fulfillRandomWords (uint256 /*_requestId*/,uint256[] calldata _randomWords) internal override {
 //Now to to select a random winner from players array
 //if players size=10 , random number=202
 //randomWinnerIndex=randomNumber%playerSize (202%10=2nd index from player array is winner)
         uint256 randomWinnerIndex= _randomWords[0] % s_players.length;
-        address randomWinner=s_players[randomWinnerIndex];
+        address payable  randomWinner=s_players[randomWinnerIndex];
         s_resentWinner=randomWinner; 
         //Sending all the money to the winner 
         s_players=new address payable[](0); //Once winner is found empty the player array
         s_lastTimeStamp=block.timestamp;  
-        (bool sucess,)=payable(s_resentWinner).call{value:address(this).balance}("");
-        require(sucess,"Transfer failed");
+        (bool success,)=randomWinner.call{value:address(this).balance}(""); 
+        require(success,"Transfer failed"); 
         s_lotteryState=LotteryState.OPEN; //Once the request is fillfiled change to OPEN
         emit RequestFulfilled(s_resentWinner); 
     } 
@@ -148,7 +154,7 @@ random winner.
     function getPlayer(uint256 index) public view returns (address){
            return s_players[index];
     }
-    function getSubscribtionId() public view returns (uint64){
+    function getSubscribtionId() public view returns (uint256){
             return i_subscriptionId;
     }
     function getKeyHash() public view returns (bytes32){
@@ -157,8 +163,8 @@ random winner.
     function getCallbackGasLimit() public view returns (uint32){
             return i_callbackGasLimit;
     }
-    function getVrfCoordinator() public view returns (VRFCoordinatorV2Interface){
-            return i_vrfCoordinator;
+    function getVrfCoordinator() public view returns (VRFConsumerBaseV2Plus){
+            return i_vrfCoordinator; 
     }
     function getRequestConfirmation() public pure returns (uint16){
             return REQUEST_CONFIRMATION;

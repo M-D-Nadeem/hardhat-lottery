@@ -9,52 +9,81 @@ devlopmentChain.includes(network.name)
     let deployer
     let lottery
     let entrenceFee
+    let accounts
+    let winnerStartBal
     beforeEach(async ()=>{
         deployer=(await getNamedAccounts()).deployer
-        const lotteryDeployResponse=await deployments.get("Lottery");
+        const lotteryDeployResponse=await deployments.get("Lottery",deployer);
         lottery=await ethers.getContractAt(lotteryDeployResponse.abi,lotteryDeployResponse.address)
-        
-        entrenceFee=networkConfig[network.config.chainId]["entrenceFee"]
-        console.log(entrenceFee);
+        accounts = await ethers.getSigners()
+        winnerStartBal = await ethers.provider.getBalance(accounts[0].address);
+
+        // entrenceFee=networkConfig[network.config.chainId]["entrenceFee"]
+        //This entrenceFee should be greater than or equal to what you provided in hadhat-helper
+        entrenceFee=await lottery.getEnterenceFee()
+        // console.log(entrenceFee);
         
     })
     describe("fulfillRandomWords",()=>{
-        // this.setTimeout(120000)
-        it("works with live Chainlink Keepers and Chainlink VRF, we get a random winner",async()=>{ 
+        it("works with live Chainlink Keepers and Chainlink VRF, we get a random winner", async () => { 
+            console.log("Setting up test...");
             
-            console.log("Setting up test...")
-            const startingTimeStamp=await lottery.getLastTimeStamp()
-            const accounts = await ethers.getSigners()
-            console.log("Setting up Listener...")
-            await new Promise(async (resolve,reject)=>{
-                 
-                lottery.once("RequestFulfilled",async ()=>{
+            const startingTimeStamp = await lottery.getLastTimeStamp();
+            console.log("Starting TimeStamp: ", startingTimeStamp.toString());
+        
+            console.log("Setting up Listener...");
+            
+            await new Promise(async (resolve, reject) => {
+                console.log("Setting up Listener...");
+        
+                lottery.once("RequestFulfilled", async () => {
                     console.log("Found the winner");
-                    try{
-                         const recentWinner=await lottery.getResentWinner()
-                         const numOfPlayer=await lottery.getNumberOfPlayers()
-                         const lastTimeStamp=-await lottery.getLastTimeStamp()
-                         const lotteryState=await lottery.getLotteryState()
-                         const winnerEndBal=await ethers.provider.getBalance(recentWinner)
-                         assert.equal(numOfPlayer.toString(),"0")
-                         assert.equal(lotteryState.toString(),"0")
-                         assert(lastTimeStamp>startingTimeStamp)
-                         assert.equal(winnerEndBal,winnerStartBal+entrenceFee)
-                         setTimeout(resolve, 5000)
-                    }catch(err){
-                        console.log(err);
-                        reject(err)
+                    try {
+                        const recentWinner = await lottery.getResentWinner();
+                        const numOfPlayers = await lottery.getNumberOfPlayers();
+                        const lastTimeStamp = await lottery.getLastTimeStamp();
+                        const lotteryState = await lottery.getLotteryState();
+                        const winnerEndBal = await ethers.provider.getBalance(recentWinner);
+                        assert.equal(recentWinner.toString(), accounts[0].address)
+                        console.log("Recent Winner: ", recentWinner);
+                        console.log("Number of Players: ", numOfPlayers.toString());
+                        console.log("Last TimeStamp: ", lastTimeStamp.toString());
+                        console.log("Lottery State: ", lotteryState.toString());
+                        console.log("Winner End Balance: ", winnerEndBal.toString());
                         
+                        assert.equal(numOfPlayers.toString(), "0");
+                        assert.equal(lotteryState.toString(), "0");
+                        assert(lastTimeStamp > startingTimeStamp);
+                        assert.equal(winnerEndBal.toString(), (winnerStartBal+entrenceFee).toString());
+                        
+                        resolve();
+                    } catch (err) {
+                        console.log(err);
+                        reject(err);
                     }
-                
-                })
-                console.log("Entering Raffle...")
-                const tx = await lottery.enterLottery({ value: entrenceFee })
-                      await tx.wait(1)
-                      console.log("Ok, time to wait...")
-                      const winnerStartBal = await ethers.provider.getBalance(accounts[0])
-                
-            })
-        })
+                });
+        
+                try {
+                    console.log("Entering Raffle...");
+                    
+                    // const minEntranceFee = await lottery.getEnterenceFee();
+                    console.log("Entrance Fee: ", entrenceFee.toString());
+        
+                    const accountBalance = await ethers.provider.getBalance(accounts[0].address);
+                    console.log("Account Balance: ", accountBalance.toString());
+                    
+                    const tx = await lottery.enterLottery({ value: entrenceFee });
+                    await tx.wait(1);
+                    console.log("Entered Raffle!");
+        
+                    console.log("Winner Start Balance: ", winnerStartBal.toString());
+                    
+                } catch (e) {
+                    console.log("Error entering raffle: ", e);
+                    reject(e);
+                }
+            });
+        });
+        
     })
 })

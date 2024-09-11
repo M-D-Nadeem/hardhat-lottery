@@ -24,9 +24,9 @@ describe("Lottery contract tests",()=>{
         
         deployer=(await getNamedAccounts()).deployer
         await deployments.fixture(["all"])
-        const lotteryDeployResponse=await deployments.get("Lottery");
+        const lotteryDeployResponse=await deployments.get("Lottery",deployer);
         lottery=await ethers.getContractAt(lotteryDeployResponse.abi,lotteryDeployResponse.address)
-        const vrfCordinatorV2MockDeployResponse=await deployments.get("VRFCoordinatorV2Mock")
+        const vrfCordinatorV2MockDeployResponse=await deployments.get("VRFCoordinatorV2_5Mock",deployer)
         vrfCordinatorV2Mock=await ethers.getContractAt(vrfCordinatorV2MockDeployResponse.abi,vrfCordinatorV2MockDeployResponse.address)
         
         
@@ -169,11 +169,11 @@ describe("Lottery contract tests",()=>{
             //Never use await inside except
             await expect(
                 vrfCordinatorV2Mock.fulfillRandomWords(0, lottery.target),
-            ).to.be.revertedWith("nonexistent request")
+            ).to.be.revertedWithCustomError(vrfCordinatorV2Mock,"InvalidRequest")
             // await expect(vrfCordinatorV2Mock.fulfillRandomWordsWithOverride(1,lottery.target,[]))
             // .to.be.revertedWith("nonexistent request")
         })
-        it.only("should pic a winner, reset the lottery, and send the money",async ()=>{
+        it("should pic a winner, reset the lottery, and send the money",async ()=>{
             const numberOfFackAcc=5;
             const accounts=await ethers.getSigners()
             for(let i=1;i<=numberOfFackAcc;i++){

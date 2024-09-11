@@ -1,3 +1,4 @@
+const { version } = require('chai');
 
 /** @type import('hardhat/config').HardhatUserConfig */
 require("@nomiclabs/hardhat-waffle")
@@ -9,7 +10,13 @@ require("hardhat-gas-reporter")
 require("hardhat-contract-sizer")
 require("dotenv").config()
 module.exports = {
-  solidity: "0.8.24",
+  // solidity: "0.8.24",
+  solidity:{
+    compilers:[
+      {version:"0.8.24"},
+      {version:"0.4.11"}
+    ]
+  },
   defaultNetwork:"hardhat",
     networks:{
     sepolia:{
